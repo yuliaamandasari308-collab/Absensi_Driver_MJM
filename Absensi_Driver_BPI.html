@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Absensi Selfie & Lokasi Real-Time</title>
+    <!-- Menggunakan Tailwind CSS untuk tampilan modern -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen p-6">
+
+    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- KOLOM FORM ABSENSI & KAMERA (KIRI) -->
+        <div class="bg-white p-6 rounded-xl shadow-md h-fit">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Form Kehadiran</h2>
+            
+            <div class="space-y-4">
+                <!-- Preview Kamera -->
+                <div class="relative w-full bg-black rounded-lg overflow-hidden aspect-video shadow-inner">
+                    <video id="webcam" autoplay playsinline class="w-full h-full object-cover scale-x-[-1]"></video>
+                    <canvas id="canvas" class="hidden"></canvas>
+                    <div class="absolute top-2 left-2 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded shadow animate-pulse">Kamera Aktif</div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label>
+                    <input type="text" id="nama" oninput="cekStatusAbsenHariIni()" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Masukkan nama Anda">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Status Kehadiran</label>
+                    <select id="status" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="Hadir">Hadir</option>
+                        <option value="Izin">Izin</option>
+                        <option value="Sakit">Sakit</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Keterangan</label>
+                    <textarea id="keterangan" rows="2" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Catatan atau alasan..."></textarea>
+                </div>
+
+                <div id="info-status" class="text-sm font-medium text-blue-600 bg-blue-50 p-2.5 rounded-lg text-center hidden"></div>
+
+                <button onclick="prosesAbsen()" id="btn-absen" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg shadow-md transition duration-200">
+                    Absen Masuk
+                </button>
+            </div>
+        </div>
+
+        <!-- KOLOM MONITORING LOG (KANAN) -->
+        <div class="bg-white p-6 rounded-xl shadow-md lg:col-span-2 overflow-hidden">
+            <div class="flex justify-between items-center mb-6 border-b pb-2">
+                <h2 class="text-2xl font-bold text-gray-800">Log Absensi Hari Ini</h2>
+                <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">Live</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50 border-b border-gray-200">
+                            <th class="p-3 font-semibold text-gray-600">Karyawan</th>
+                            <th class="p-3 font-semibold text-gray-600">Foto Masuk</th>
+                            <th class="p-3 font-semibold text-gray-600">Foto Pulang</th>
+                            <th class="p-3 font-semibold text-gray-600">Jam Shift</th>
+                            <th class="p-3 font-semibold text-gray-600">Keterangan & Lokasi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabel-log" class="divide-y divide-gray-100">
+                        <!-- Data Real-time Di Sini -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- SCRIPT FIREBASE & LOGIKA -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, push, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // TEMPELKAN KODE KONFIGURASI FIREBASE KAMU DI SINI
+        const firebaseConfig = {
+  apiKey: "AIzaSyBPDd7mO9h2onDYLV-XfnGxclYKN9Q_BMw",
+  authDomain: "absensikaryawan-48ad3.firebaseapp.com",
+  databaseURL: "https://absensikaryawan-48ad3-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "absensikaryawan-48ad3",
+  storageBucket: "absensikaryawan-48ad3.firebasestorage.app",
+  messagingSenderId: "853977616367",
+  appId: "1:853977616367:web:21e1a1f43e4c862e8cb01a",
+  measurementId: "G-N1HW5JY6ZL"
+};
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const absenRef = ref(db, 'absen_selfie');
+
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        let dataAbsenLengkap = {};
+        let idAbsenHariIni = null; 
+        let sedangAbsenPulang = false;
+
+        // Nyalakan Kamera Otomatis saat halaman dibuka
+        navigator.mediaDevices.getUserMedia({ 
+    video: { 
+        width: 400, 
+        height: 300,
+        facingMode: "user" // Memaksa browser HP membuka kamera depan (Selfie)
+    } 
+})
+            .then(stream => video.srcObject = stream)
+            .catch(err => alert("Gagal mengakses kamera! Pastikan izin kamera diberikan."));
+
+        // Ambil Gambar (Snapshot) dari Video
+        function ambilFoto() {
+            const context = canvas.getContext('2d');
+            canvas.width = 320; // Kompres ukuran gambar agar hemat penyimpanan database
+            canvas.height = 240;
+            // Efek mirror agar hasil foto tidak terbalik
+            context.translate(canvas.width, 0);
+            context.scale(-1, 1);
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg', 0.7); // Kompres kualitas ke 70%
+        }
+
+        // Tampilkan Data secara Real-Time
+        onValue(absenRef, (snapshot) => {
+            const tbody = document.getElementById('tabel-log');
+            tbody.innerHTML = "";
+
+            if(snapshot.exists()) {
+                dataAbsenLengkap = snapshot.val();
+                Object.keys(dataAbsenLengkap).reverse().forEach((key) => {
+                    const item = dataAbsenLengkap[key];
+                    
+                    let warnaBadge = item.status === "Hadir" ? "bg-green-100 text-green-800" : (item.status === "Izin" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800");
+                    const linkMasuk = `https://www.google.com/maps?q=${item.lat_masuk},${item.long_masuk}`;
+                    const linkPulang = item.lat_pulang ? `https://www.google.com/maps?q=${item.lat_pulang},${item.long_pulang}` : '#';
+
+                    const barisTabel = `
+                        <tr class="hover:bg-gray-50 transition border-b border-gray-100">
+                            <td class="p-3 font-medium text-gray-800">
+                                ${item.nama} <br>
+                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-md ${warnaBadge}">${item.status}</span>
+                            </td>
+                            <td class="p-2">
+                                <img src="${item.foto_masuk}" class="w-20 aspect-video object-cover rounded shadow border" />
+                            </td>
+                            <td class="p-2">
+                                ${item.foto_pulang ? `<img src="${item.foto_pulang}" class="w-20 aspect-video object-cover rounded shadow border" />` : '<span class="text-gray-400 text-xs italic">Belum Pulang</span>'}
+                            </td>
+                            <td class="p-3 text-xs space-y-1">
+                                <div class="text-gray-500 font-semibold">${item.tanggal}</div>
+                                <div class="text-green-600">🛫 Msk: <b>${item.jam_masuk}</b></div>
+                                <div class="text-orange-600">🛬 Plg: <b>${item.jam_pulang || '-'}</b></div>
+                            </td>
+                            <td class="p-3 text-xs space-y-2">
+                                <div class="text-gray-600 italic max-w-[150px] break-words">"${item.keterangan}"</div>
+                                <div class="space-y-0.5">
+                                    <a href="${linkMasuk}" target="_blank" class="block text-blue-600 hover:underline">📍 Lokasi Masuk ↗</a>
+                                    ${item.lat_pulang ? `<a href="${linkPulang}" target="_blank" class="block text-orange-600 hover:underline">📍 Lokasi Pulang ↗</a>` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += barisTabel;
+                });
+            } else {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">Belum ada absensi hari ini.</td></tr>`;
+            }
+            cekStatusAbsenHariIni(); 
+        });
+
+        // Cek Status Nama Karyawan
+        window.cekStatusAbsenHariIni = () => {
+            const namaInput = document.getElementById('nama').value.trim().toLowerCase();
+            const infoBox = document.getElementById('info-status');
+            const btn = document.getElementById('btn-absen');
+            const tglHariIni = new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'});
+
+            idAbsenHariIni = null;
+            sedangAbsenPulang = false;
+
+            if (!namaInput) {
+                infoBox.classList.add('hidden');
+                btn.innerText = "Absen Masuk";
+                btn.className = "w-full bg-green-600 text-white font-semibold py-3 rounded-lg shadow";
+                return;
+            }
+
+            Object.keys(dataAbsenLengkap).forEach((key) => {
+                const item = dataAbsenLengkap[key];
+                if (item.nama.toLowerCase() === namaInput && item.tanggal === tglHariIni) {
+                    idAbsenHariIni = key;
+                    sedangAbsenPulang = !item.jam_pulang;
+                }
+            });
+
+            infoBox.classList.remove('hidden');
+            if (idAbsenHariIni && sedangAbsenPulang) {
+                infoBox.innerText = "Sistem Mendeteksi: Anda akan melakukan Absen Pulang.";
+                infoBox.className = "text-sm font-medium text-orange-600 bg-orange-50 p-2.5 rounded-lg text-center";
+                btn.innerText = "Absen Pulang & Ambil Foto";
+                btn.className = "w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 rounded-lg shadow";
+            } else if (idAbsenHariIni && !sedangAbsenPulang) {
+                infoBox.innerText = "Anda sudah menyelesaikan absensi hari ini.";
+                infoBox.className = "text-sm font-medium text-gray-600 bg-gray-100 p-2.5 rounded-lg text-center";
+                btn.innerText = "Absen Selesai";
+                btn.className = "w-full bg-gray-400 text-white font-semibold py-3 rounded-lg shadow cursor-not-allowed";
+            } else {
+                infoBox.innerText = "Sistem Mendeteksi: Anda akan melakukan Absen Masuk.";
+                infoBox.className = "text-sm font-medium text-green-600 bg-green-50 p-2.5 rounded-lg text-center";
+                btn.innerText = "Absen Masuk & Ambil Foto";
+                btn.className = "w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg shadow";
+            }
+        };
+
+        // Alur Proses Geolokasi & Kamera
+        window.prosesAbsen = () => {
+            const nama = document.getElementById('nama').value;
+            const btn = document.getElementById('btn-absen');
+
+            if (!nama.trim()) { alert("Nama tidak boleh kosong!"); return; }
+            if (idAbsenHariIni && !sedangAbsenPulang) return;
+
+            btn.innerText = "Memproses Absensi...";
+            btn.disabled = true;
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const fotoBase64 = ambilFoto(); // Capture foto dari webcam
+                    simpanAbsen(position.coords.latitude, position.coords.longitude, fotoBase64);
+                }, (error) => {
+                    alert("Gagal mengambil koordinat GPS. Cek izin lokasi browser.");
+                    btn.disabled = false;
+                    cekStatusAbsenHariIni();
+                });
+            } else {
+                alert("Browser tidak mendukung geolokasi.");
+                btn.disabled = false;
+            }
+        };
+
+        // Simpan Data Akhir ke Database
+        function simpanAbsen(lat, long, foto) {
+            const nama = document.getElementById('nama').value;
+            const status = document.getElementById('status').value;
+            const keterangan = document.getElementById('keterangan').value || "-";
+            
+            const tgl = new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'});
+            const jam = new Date().toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+
+            if (sedangAbsenPulang && idAbsenHariIni) {
+                const updateRef = ref(db, `absen_selfie/${idAbsenHariIni}`);
+                update(updateRef, {
+                    jam_pulang: jam,
+                    lat_pulang: lat,
+                    long_pulang: long,
+                    foto_pulang: foto,
+                    keterangan: keterangan !== "-" ? keterangan : dataAbsenLengkap[idAbsenHariIni].keterangan
+                }).then(() => {
+                    alert("Absen Pulang Berhasil!");
+                    resetForm();
+                });
+            } else {
+                push(absenRef, {
+                    nama: nama,
+                    status: status,
+                    tanggal: tgl,
+                    jam_masuk: jam,
+                    jam_pulang: "",
+                    keterangan: keterangan,
+                    lat_masuk: lat,
+                    long_masuk: long,
+                    foto_masuk: foto,
+                    foto_pulang: ""
+                }).then(() => {
+                    alert("Absen Masuk Berhasil!");
+                    resetForm();
+                });
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('nama').value = "";
+            document.getElementById('keterangan').value = "";
+            document.getElementById('btn-absen').disabled = false;
+         
+}      
+    </script>
+</body>
+</html>
