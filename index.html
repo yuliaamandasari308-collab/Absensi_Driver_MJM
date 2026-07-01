@@ -13,7 +13,7 @@
         
         <!-- KOLOM FORM ABSENSI & KAMERA (KIRI) -->
         <div class="bg-white p-6 rounded-xl shadow-md h-fit">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Form Kehadiran</h2>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Form Kehadiran driver</h2>
             
             <div class="space-y-4">
                 <!-- Preview Kamera -->
@@ -61,7 +61,7 @@
                 <table class="w-full text-left text-sm border-collapse">
                     <thead>
                         <tr class="bg-gray-50 border-b border-gray-200">
-                            <th class="p-3 font-semibold text-gray-600">Karyawan</th>
+                            <th class="p-3 font-semibold text-gray-600">Nama Karyawan</th>
                             <th class="p-3 font-semibold text-gray-600">Foto Masuk</th>
                             <th class="p-3 font-semibold text-gray-600">Foto Pulang</th>
                             <th class="p-3 font-semibold text-gray-600">Jam Shift</th>
@@ -84,14 +84,13 @@
 
         // TEMPELKAN KODE KONFIGURASI FIREBASE KAMU DI SINI
         const firebaseConfig = {
-  apiKey: "AIzaSyBPDd7mO9h2onDYLV-XfnGxclYKN9Q_BMw",
-  authDomain: "absensikaryawan-48ad3.firebaseapp.com",
-  databaseURL: "https://absensikaryawan-48ad3-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "absensikaryawan-48ad3",
-  storageBucket: "absensikaryawan-48ad3.firebasestorage.app",
-  messagingSenderId: "853977616367",
-  appId: "1:853977616367:web:21e1a1f43e4c862e8cb01a",
-  measurementId: "G-N1HW5JY6ZL"
+  apiKey: "AIzaSyBtleiVO-RcxNxwJfuwuS-Mgv-35wTT3NA",
+  authDomain: "absensidriver-a4bb2.firebaseapp.com",
+  projectId: "absensidriver-a4bb2",
+  storageBucket: "absensidriver-a4bb2.firebasestorage.app",
+  messagingSenderId: "312573180285",
+  appId: "1:312573180285:web:0d0f22d64df09c5585f414",
+  measurementId: "G-04GSPLVJJ1"
 };
 
         const app = initializeApp(firebaseConfig);
@@ -219,7 +218,7 @@
             }
         };
 
-        // Alur Proses Geolokasi & Kamera
+        // Alur Proses Geolokasi & Kamera android
         window.prosesAbsen = () => {
             const nama = document.getElementById('nama').value;
             const btn = document.getElementById('btn-absen');
@@ -265,6 +264,7 @@
                 }).then(() => {
                     alert("Absen Pulang Berhasil!");
                     resetForm();
+
                 });
             } else {
                 push(absenRef, {
@@ -289,7 +289,7 @@
             document.getElementById('nama').value = "";
             document.getElementById('keterangan').value = "";
             document.getElementById('btn-absen').disabled = false;
-         
+
 }      
     </script>
 </body>
